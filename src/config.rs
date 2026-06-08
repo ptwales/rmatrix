@@ -51,10 +51,9 @@ pub struct Config {
     pub pause: bool,
 }
 
-// This is incorrect usage of Default.
-impl Default for Config {
+impl Config {
     /// Get the new config object based on command line arguments
-    fn default() -> Self {
+    pub fn from_opts() -> Self {
         let opt = Opt::parse();
 
         Config {
