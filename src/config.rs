@@ -6,6 +6,10 @@ use super::MatrixColor;
 #[command(version)]
 /// Shows a scrolling 'Matrix' like screen in your terminal
 struct Opt {
+    /// Asynchronous scroll
+    #[arg(short, long = "async")]
+    asynch: bool,
+
     #[arg(short, action=clap::ArgAction::Count)]
     /// Bold characters on
     bold: u8,
@@ -40,6 +44,7 @@ struct Opt {
 
 /// The global state object
 pub struct Config {
+    pub asynch: bool,
     pub bold: u8,
     pub console: bool,
     pub oldstyle: bool,
@@ -57,6 +62,7 @@ impl Config {
         let opt = Opt::parse();
 
         Config {
+            asynch: opt.asynch,
             bold: opt.bold,
             console: opt.console,
             oldstyle: opt.oldstyle,
@@ -80,6 +86,7 @@ impl Config {
 
         match keypress {
             'q' => return true,
+            'a' => self.asynch = !self.asynch,
             'b' => self.bold = 1,
             'B' => self.bold = 2,
             'n' => self.bold = 0,

@@ -23,6 +23,7 @@ This version uses `crossterm` for cross-platform terminal support without needin
 | Shift + 1-9 | Colour of the characters |
 | r | Rainbow mode |
 | p-P | Pause or unpause the animation |
+| a | Toggle asynchronous scrolling |
 
 ## Installation
 
