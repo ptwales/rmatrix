@@ -26,7 +26,7 @@ struct Opt {
     /// X window mode, use if your xterm is using mtx.pcf
     xwindow: bool,
 
-    #[arg(short, long, default_value = "4", value_parser = clap::value_parser!(u8).range(1..11))]
+    #[arg(short, long, default_value = "4", value_parser = clap::value_parser!(u8).range(1..=10))]
     /// Screen update delay
     update: u8,
 
