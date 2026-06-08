@@ -8,6 +8,7 @@ use std::io;
 use std::sync::Arc;
 #[cfg(unix)]
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use std::time::Duration;
 
 use crossterm::event::{Event, KeyCode, KeyModifiers};
@@ -123,9 +124,13 @@ fn main() -> io::Result<()> {
             }
         }
 
-        // Update and redraw the board.
-        matrix.arrange(&config);
-        matrix.draw(&mut terminal, &config)?;
+        if !config.pause {
+            // Update and redraw the board.
+            matrix.arrange(&config);
+            matrix.draw(&mut terminal)?;
+        }
+        // Always sleep or else we spike the CPU
+        thread::sleep(Duration::from_millis(config.update as u64 * 10));
     }
 
     terminal.finish()
