@@ -12,6 +12,7 @@ pub mod config;
 
 use config::Config;
 
+use clap::ValueEnum;
 use crossterm::cursor;
 use crossterm::event::{self, Event};
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
@@ -37,7 +38,7 @@ fn coin_flip() -> bool {
     RNG.with(|rng| (*rng).borrow_mut().random())
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum MatrixColor {
     Black,
     Green,
