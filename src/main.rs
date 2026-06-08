@@ -76,7 +76,7 @@ impl SignalFlags {
 
 fn main() -> io::Result<()> {
     // Get command line args
-    let mut config = Config::default();
+    let mut config = Config::from_opts();
 
     // Save the terminal state and start up the terminal
     let mut terminal = Terminal::new()?;
