@@ -30,13 +30,8 @@ struct Opt {
     /// Screen update delay
     update: u8,
 
-    #[arg(
-        short = 'C',
-        long,
-        default_value = "green",
-        value_parser = ["green", "red", "blue", "white", "yellow", "cyan", "magenta", "black"]
-    )]
-    colour: String,
+    #[arg(short = 'C', long, value_enum, default_value = "green")]
+    colour: MatrixColor,
 
     #[arg(short, long)]
     /// Rainbow mode
@@ -62,18 +57,6 @@ impl Default for Config {
     fn default() -> Self {
         let opt = Opt::parse();
 
-        let colour = match opt.colour.as_ref() {
-            "green" => MatrixColor::Green,
-            "red" => MatrixColor::Red,
-            "blue" => MatrixColor::Blue,
-            "white" => MatrixColor::White,
-            "yellow" => MatrixColor::Yellow,
-            "cyan" => MatrixColor::Cyan,
-            "magenta" => MatrixColor::Magenta,
-            "black" => MatrixColor::Black,
-            _ => unreachable!(),
-        };
-
         Config {
             bold: opt.bold,
             console: opt.console,
@@ -82,7 +65,7 @@ impl Default for Config {
             xwindow: opt.xwindow,
             update: opt.update,
             rainbow: opt.rainbow,
-            colour,
+            colour: opt.colour,
             pause: false,
         }
     }
