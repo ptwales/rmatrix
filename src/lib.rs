@@ -6,7 +6,6 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::{self, Stdout, Write};
 use std::ops::Range;
-use std::thread;
 use std::time::Duration;
 
 pub mod config;
@@ -239,7 +238,7 @@ impl Matrix {
         });
     }
     /// Draw the matrix on the screen
-    pub fn draw(&self, terminal: &mut Terminal, config: &Config) -> io::Result<()> {
+    pub fn draw(&self, terminal: &mut Terminal) -> io::Result<()> {
         let stdout = &mut terminal.stdout;
 
         //TODO: Use an iterator or something nicer
@@ -267,7 +266,6 @@ impl Matrix {
             }
         }
         stdout.flush()?;
-        thread::sleep(Duration::from_millis(config.update as u64 * 10));
         Ok(())
     }
 }
