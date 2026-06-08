@@ -89,9 +89,12 @@ impl Default for Block {
     }
 }
 
+static MAX_DELAY: u8 = 4;
+
 pub struct Column {
     length: usize,        // The length of the stream
     spaces: usize,        // The spaces between streams
+    update_rate: u8,      // The steps between updates (only enabled in async)
     col: VecDeque<Block>, // The actual column
 }
 
@@ -101,6 +104,7 @@ impl Column {
         Column {
             length: random_range(3..lines),
             spaces: random_range(1..lines + 1),
+            update_rate: random_range(1..(MAX_DELAY as usize)) as u8,
             col: (0..lines).map(|_| Block::default()).collect(),
         }
     }
@@ -140,6 +144,7 @@ impl std::ops::Index<usize> for Column {
 
 pub struct Matrix {
     m: Vec<Column>,
+    update_count: u8,
 }
 
 impl std::ops::Index<usize> for Matrix {
@@ -158,6 +163,7 @@ impl Default for Matrix {
         // Create the matrix
         Matrix {
             m: (0..cols).map(|_| Column::new(lines)).collect(),
+            update_count: 0,
         }
     }
 }
@@ -198,46 +204,56 @@ impl Matrix {
                 col.length = random_range(3..lines);
             }
         });
+        self.update_count += 1;
+        if self.update_count > MAX_DELAY {
+            self.update_count = 1
+        }
         if config.oldstyle {
-            self.old_style_move_down();
+            self.old_style_move_down(config);
         } else {
-            self.move_down();
+            self.move_down(config);
         }
     }
-    fn move_down(&mut self) {
-        self.m.iter_mut().for_each(|col| {
-            // Reset for each column
-            let mut in_stream = false;
+    fn move_down(&mut self, config: &Config) {
+        self.m
+            .iter_mut()
+            .filter(|col| !config.asynch || self.update_count > col.update_rate)
+            .for_each(|col| {
+                // Reset for each column
+                let mut in_stream = false;
 
-            let mut last_was_white = false; // Keep track of white heads
-            let mut running_color = MatrixColor::Cyan;
+                let mut last_was_white = false; // Keep track of white heads
+                let mut running_color = MatrixColor::Cyan;
 
-            col.col.iter_mut().for_each(|block| {
-                if !in_stream {
-                    if !block.is_space() {
-                        block.val = ' ';
-                        in_stream = true; // We're now in a stream
-                        running_color = block.color;
+                col.col.iter_mut().for_each(|block| {
+                    if !in_stream {
+                        if !block.is_space() {
+                            block.val = ' ';
+                            in_stream = true; // We're now in a stream
+                            running_color = block.color;
+                        }
+                    } else if block.is_space() {
+                        // New rand char for head of stream
+                        block.val = rand_char();
+                        block.white = last_was_white;
+                        in_stream = false;
                     }
-                } else if block.is_space() {
-                    // New rand char for head of stream
-                    block.val = rand_char();
-                    block.white = last_was_white;
-                    in_stream = false;
-                }
-                // Swapped to "pass on" whiteness and prepare the variable for the next iteration
-                std::mem::swap(&mut last_was_white, &mut block.white);
-                block.color = running_color;
+                    // Swapped to "pass on" whiteness and prepare the variable for the next iteration
+                    std::mem::swap(&mut last_was_white, &mut block.white);
+                    block.color = running_color;
+                })
             })
-        })
     }
-    fn old_style_move_down(&mut self) {
+    fn old_style_move_down(&mut self, config: &Config) {
         // Iterate over all columns and swap spaces
-        self.m.iter_mut().for_each(|col| {
-            col.col.pop_back();
-            col.col.push_back(Block::default()); // Put a Blank space at the head.
-            col.col.rotate_right(1)
-        });
+        self.m
+            .iter_mut()
+            .filter(|col| !config.asynch || self.update_count > col.update_rate)
+            .for_each(|col| {
+                col.col.pop_back();
+                col.col.push_back(Block::default()); // Put a Blank space at the head.
+                col.col.rotate_right(1)
+            });
     }
     /// Draw the matrix on the screen
     pub fn draw(&self, terminal: &mut Terminal, config: &Config) -> io::Result<()> {
