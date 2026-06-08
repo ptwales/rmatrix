@@ -1,6 +1,6 @@
+extern crate clap;
 extern crate crossterm;
 extern crate rand;
-extern crate structopt;
 
 use std::cell::RefCell;
 use std::collections::VecDeque;

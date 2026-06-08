@@ -1,82 +1,66 @@
-use structopt::StructOpt;
+use clap::Parser;
 
 use super::MatrixColor;
 
-#[derive(Debug, StructOpt)]
-#[structopt(
-    name = "rmatrix",
-    about = "Shows a scrolling 'Matrix' like screen in your terminal"
-)]
-/// The struct for handling command line arguments
+#[derive(Debug, Parser)]
+#[command(version, about)]
+/// Shows a scrolling 'Matrix' like screen in your terminal
 struct Opt {
-    #[structopt(short = "b", parse(from_occurrences))]
+    #[arg(short, action=clap::ArgAction::Count)]
     /// Bold characters on
-    bold: isize,
+    bold: u8,
 
-    #[structopt(short = "l", long = "console")]
+    #[arg(short, long)]
     /// Linux mode (use matrix console font)
     console: bool,
 
-    #[structopt(short = "o", long = "oldstyle")]
+    #[arg(short, long)]
     /// Use old-style scrolling
     oldstyle: bool,
 
-    #[structopt(short = "s", long = "screensaver")]
+    #[arg(short, long)]
     /// "Screensaver" mode, exits on first keystroke
     screensaver: bool,
 
-    #[structopt(short = "x", long = "xwindow")]
+    #[arg(short, long)]
     /// X window mode, use if your xterm is using mtx.pcf
     xwindow: bool,
 
-    #[structopt(
-        short = "u",
-        long = "update",
-        default_value = "4",
-        parse(try_from_str = validate_update)
-    )]
+    #[arg(short, long, default_value = "4", value_parser = clap::value_parser!(u8).range(1..11))]
     /// Screen update delay
-    update: usize,
+    update: u8,
 
-    #[structopt(
-        short = "C",
-        long = "colour",
+    #[arg(
+        short = 'C',
+        long,
         default_value = "green",
-        possible_values = &["green", "red", "blue", "white", "yellow", "cyan", "magenta", "black"]
+        value_parser = ["green", "red", "blue", "white", "yellow", "cyan", "magenta", "black"]
     )]
     colour: String,
 
-    #[structopt(short = "r", long = "rainbow")]
+    #[arg(short, long)]
     /// Rainbow mode
     rainbow: bool,
 }
 
-fn validate_update(n: &str) -> Result<usize, &'static str> {
-    if let Ok(n) = n.parse::<usize>()
-        && n <= 10
-    {
-        return Ok(n);
-    }
-    Err("must be a number between 1 and 10")
-}
-
 /// The global state object
 pub struct Config {
-    pub bold: isize,
+    pub bold: u8,
     pub console: bool,
     pub oldstyle: bool,
     pub screensaver: bool,
     pub xwindow: bool,
-    pub update: usize,
+    pub update: u8,
     pub colour: MatrixColor,
     pub rainbow: bool,
     pub pause: bool,
 }
 
+// This is incorrect usage of Default.
 impl Default for Config {
     /// Get the new config object based on command line arguments
     fn default() -> Self {
-        let opt = Opt::from_args();
+        let opt = Opt::parse();
 
         let colour = match opt.colour.as_ref() {
             "green" => MatrixColor::Green,
@@ -150,7 +134,7 @@ impl Config {
             }
             'p' | 'P' => self.pause = !self.pause,
             '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '0' => {
-                self.update = keypress as usize - 48 // Sneaky way to avoid parsing
+                self.update = keypress as u8 - 48 // Sneaky way to avoid parsing
             }
             _ => {}
         }
