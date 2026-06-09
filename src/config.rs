@@ -3,7 +3,7 @@ use clap::Parser;
 use super::MatrixColor;
 
 #[derive(Debug, Parser)]
-#[command(version, about)]
+#[command(version)]
 /// Shows a scrolling 'Matrix' like screen in your terminal
 struct Opt {
     #[arg(short, action=clap::ArgAction::Count)]
