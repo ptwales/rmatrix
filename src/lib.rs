@@ -50,19 +50,10 @@ pub enum MatrixColor {
     Yellow,
 }
 
-impl MatrixColor {
-    fn as_crossterm(self) -> Color {
-        match self {
-            MatrixColor::Black => Color::Black,
-            MatrixColor::Green => Color::Green,
-            MatrixColor::White => Color::White,
-            MatrixColor::Red => Color::Red,
-            MatrixColor::Cyan => Color::Cyan,
-            MatrixColor::Magenta => Color::Magenta,
-            MatrixColor::Blue => Color::Blue,
-            MatrixColor::Yellow => Color::Yellow,
-        }
-    }
+pub enum FontWeight {
+    Regular,
+    SemiBold, // sometimes bold
+    Bold,
 }
 
 #[derive(Clone)]
@@ -70,11 +61,40 @@ pub struct Block {
     val: char,
     white: bool,
     color: MatrixColor,
+    bold: bool,
 }
 
 impl Block {
     fn is_space(&self) -> bool {
         self.val == ' '
+    }
+
+    pub fn term_color(&self) -> Color {
+        if self.white {
+            Color::White
+        } else if self.bold {
+            match self.color {
+                MatrixColor::Black => Color::DarkGrey,
+                MatrixColor::Green => Color::Green,
+                MatrixColor::White => Color::White,
+                MatrixColor::Red => Color::Red,
+                MatrixColor::Cyan => Color::Cyan,
+                MatrixColor::Magenta => Color::Magenta,
+                MatrixColor::Blue => Color::Blue,
+                MatrixColor::Yellow => Color::Yellow,
+            }
+        } else {
+            match self.color {
+                MatrixColor::Black => Color::Black,
+                MatrixColor::Green => Color::DarkGreen,
+                MatrixColor::White => Color::Grey,
+                MatrixColor::Red => Color::DarkRed,
+                MatrixColor::Cyan => Color::DarkCyan,
+                MatrixColor::Magenta => Color::DarkMagenta,
+                MatrixColor::Blue => Color::DarkBlue,
+                MatrixColor::Yellow => Color::DarkYellow,
+            }
+        }
     }
 }
 
@@ -84,6 +104,7 @@ impl Default for Block {
             val: ' ',
             white: false,
             color: MatrixColor::Red,
+            bold: false,
         }
     }
 }
@@ -237,6 +258,11 @@ impl Matrix {
                         block.val = rand_char();
                         block.white = last_was_white;
                         in_stream = false;
+                        block.bold = match config.bold {
+                            FontWeight::Regular => false,
+                            FontWeight::Bold => true,
+                            FontWeight::SemiBold => coin_flip(),
+                        };
                     }
                     // Swapped to "pass on" whiteness and prepare the variable for the next iteration
                     std::mem::swap(&mut last_was_white, &mut block.white);
@@ -262,21 +288,17 @@ impl Matrix {
         //TODO: Use an iterator or something nicer
         for j in 1..self.num_lines() {
             // Saving the last colour allows us to change colour only when the colour changes.
-            let mut last_colour = self[0][j].color;
-            queue!(stdout, SetForegroundColor(last_colour.as_crossterm()))?;
+            let mut last_colour = self[0][j].term_color();
+            queue!(stdout, SetForegroundColor(self[0][j].term_color()))?;
 
             for i in 0..self.num_columns() {
                 // Pick the colour we need
-                let mcolour = if self[i][j].white {
-                    MatrixColor::White
-                } else {
-                    self[i][j].color
-                };
+                let mcolour = self[i][j].term_color();
 
                 queue!(stdout, cursor::MoveTo(2 * i as u16, j as u16 - 1))?; // Move the cursor
                 if last_colour != mcolour {
                     // Set the colour in the terminal.
-                    queue!(stdout, SetForegroundColor(mcolour.as_crossterm()))?;
+                    queue!(stdout, SetForegroundColor(mcolour))?;
                     last_colour = mcolour;
                 }
                 // Draw the character.
