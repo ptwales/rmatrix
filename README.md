@@ -24,6 +24,7 @@ This version uses `crossterm` for cross-platform terminal support without needin
 | r | Rainbow mode |
 | p-P | Pause or unpause the animation |
 | a | Toggle asynchronous scrolling |
+| B,b,n | Set style to bold, sometimes bold, or no bold |
 
 ## Installation
 

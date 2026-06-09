@@ -1,6 +1,8 @@
 use clap::Parser;
+use std::cmp::Ordering;
 
-use super::MatrixColor;
+use crate::FontWeight;
+use crate::MatrixColor;
 
 #[derive(Debug, Parser)]
 #[command(version)]
@@ -10,7 +12,7 @@ struct Opt {
     #[arg(short, long = "async")]
     asynch: bool,
 
-    #[arg(short, action=clap::ArgAction::Count)]
+    #[arg(short, action = clap::ArgAction::Count, value_parser = clap::value_parser!(u8).range(0..=2))]
     /// Bold characters on
     bold: u8,
 
@@ -45,7 +47,7 @@ struct Opt {
 /// The global state object
 pub struct Config {
     pub asynch: bool,
-    pub bold: u8,
+    pub bold: FontWeight,
     pub console: bool,
     pub oldstyle: bool,
     pub screensaver: bool,
@@ -60,10 +62,14 @@ impl Config {
     /// Get the new config object based on command line arguments
     pub fn from_opts() -> Self {
         let opt = Opt::parse();
-
+        let bold = match opt.bold.cmp(&1u8) {
+            Ordering::Less => FontWeight::Regular,
+            Ordering::Equal => FontWeight::SemiBold,
+            Ordering::Greater => FontWeight::Bold,
+        };
         Config {
             asynch: opt.asynch,
-            bold: opt.bold,
+            bold,
             console: opt.console,
             oldstyle: opt.oldstyle,
             screensaver: opt.screensaver,
@@ -87,9 +93,9 @@ impl Config {
         match keypress {
             'q' => return true,
             'a' => self.asynch = !self.asynch,
-            'b' => self.bold = 1,
-            'B' => self.bold = 2,
-            'n' => self.bold = 0,
+            'b' => self.bold = FontWeight::SemiBold,
+            'B' => self.bold = FontWeight::Bold,
+            'n' => self.bold = FontWeight::Regular,
             '!' => {
                 self.colour = MatrixColor::Red;
                 self.rainbow = false;

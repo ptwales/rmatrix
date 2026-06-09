@@ -127,7 +127,7 @@ fn main() -> io::Result<()> {
         if !config.pause {
             // Update and redraw the board.
             matrix.arrange(&config);
-            matrix.draw(&mut terminal)?;
+            matrix.draw(&config, &mut terminal)?;
             thread::sleep(Duration::from_millis(config.update as u64 * 10));
         } else {
             // Always sleep or else we spike the CPU
