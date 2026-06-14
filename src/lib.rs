@@ -26,16 +26,16 @@ thread_local! {
 }
 
 fn random_range(range: Range<usize>) -> usize {
-    RNG.with(|rng| (*rng).borrow_mut().random_range(range))
+    RNG.with_borrow_mut(|rng| rng.random_range(range))
 }
 
 fn rand_char() -> char {
     let (randnum, randmin) = (93, 33);
-    RNG.with(|rng| (*rng).borrow_mut().random::<u8>() % randnum + randmin) as char
+    RNG.with_borrow_mut(|rng| rng.random::<u8>() % randnum + randmin) as char
 }
 
 fn coin_flip() -> bool {
-    RNG.with(|rng| (*rng).borrow_mut().random())
+    RNG.with_borrow_mut(|rng| rng.random())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -101,10 +101,10 @@ impl Default for Block {
 static MAX_DELAY: u8 = 3;
 
 pub struct Column {
-    length: usize,        // The length of the stream
-    spaces: usize,        // The spaces between streams
-    update_rate: u8,      // The steps between updates (only enabled in async)
-    col: VecDeque<Block>, // The actual column
+    length: usize,         // The length of the stream
+    spaces: usize,         // The spaces between streams
+    update_rate: u8,       // The steps between updates (only enabled in async)
+    rows: VecDeque<Block>, // The actual column
 }
 
 impl Column {
@@ -114,19 +114,22 @@ impl Column {
             length: random_range(3..lines),
             spaces: random_range(1..lines + 1),
             update_rate: random_range(1..(MAX_DELAY as usize)) as u8,
-            col: (0..lines).map(|_| Block::default()).collect(),
+            rows: (0..lines).map(|_| Block::default()).collect(),
         }
     }
+
     fn head_is_empty(&self) -> bool {
-        self.col[1].val == ' '
+        self.rows[1].val == ' '
     }
+
     fn new_rand_char(&mut self) {
-        self.col[0].val = rand_char();
-        self.col[0].color = self.col[1].color;
+        self.rows[0].val = rand_char();
+        self.rows[0].color = self.rows[1].color;
     }
+
     fn new_rand_head(&mut self, config: &Config) {
-        self.col[0].val = rand_char();
-        self.col[0].color = if config.rainbow {
+        self.rows[0].val = rand_char();
+        self.rows[0].color = if config.rainbow {
             match random_range(0..6) {
                 0 => MatrixColor::Green,
                 1 => MatrixColor::Blue,
@@ -140,27 +143,46 @@ impl Column {
             config.colour
         };
         // 50/50 chance the head is white
-        self.col[0].white = coin_flip();
+        self.rows[0].white = coin_flip();
     }
-}
 
-impl std::ops::Index<usize> for Column {
-    type Output = Block;
-    fn index(&self, i: usize) -> &Self::Output {
-        &self.col[i]
+    fn old_move_down(&mut self) {
+        self.rows.pop_back();
+        self.rows.push_back(Block::default()); // Put a Blank space at the head.
+        self.rows.rotate_right(1);
+    }
+
+    fn new_move_down(&mut self) {
+        let mut in_stream = false; // Reset for each column
+        let mut last_was_white = false; // Keep track of white heads
+        let mut running_color = MatrixColor::Cyan;
+
+        for block in self.rows.iter_mut() {
+            if !in_stream {
+                if !block.is_space() {
+                    block.val = ' ';
+                    in_stream = true; // We're now in a stream
+                    running_color = block.color;
+                }
+            } else if block.is_space() {
+                // New rand char for head of stream
+                block.val = rand_char();
+                block.white = last_was_white;
+                // blocks always have an internal random "bold" state but 'B' and 'n' options ignore it.
+                block.bold = coin_flip();
+                block.color = running_color;
+                in_stream = false; // now out of stream
+            }
+            // Swapped to "pass on" whiteness and prepare the variable for the next iteration
+            std::mem::swap(&mut last_was_white, &mut block.white);
+        }
     }
 }
 
 pub struct Matrix {
-    m: Vec<Column>,
+    columns: Vec<Column>,
     update_count: u8,
-}
-
-impl std::ops::Index<usize> for Matrix {
-    type Output = Column;
-    fn index(&self, i: usize) -> &Self::Output {
-        &self.m[i]
-    }
+    lines: usize,
 }
 
 impl Default for Matrix {
@@ -168,108 +190,73 @@ impl Default for Matrix {
     fn default() -> Self {
         // Get the screen dimensions
         let (lines, cols) = get_term_size();
+        let columns = (0..cols).map(|_| Column::new(lines)).collect();
 
         // Create the matrix
         Matrix {
-            m: (0..cols).map(|_| Column::new(lines)).collect(),
+            columns,
             update_count: 0,
+            lines,
         }
     }
 }
 
 impl Matrix {
-    fn num_columns(&self) -> usize {
-        self.m.len()
-    }
-
-    fn num_lines(&self) -> usize {
-        self[0].col.len()
-    }
-
     /// Make the next iteration of matrix
     pub fn arrange(&mut self, config: &Config) {
-        let lines = self.num_lines();
-
-        self.m.iter_mut().for_each(|col| {
-            if col.head_is_empty() && col.spaces != 0 {
-                // Decrement the spaces until the next stream starts
-                col.spaces -= 1;
-            } else if col.head_is_empty() && col.spaces == 0 {
-                // Start a new stream
-                col.new_rand_head(config);
-
-                // Decrement length of stream
-                col.length -= 1;
-
-                // Reset number of spaces until next stream
-                col.spaces = random_range(1..lines + 1);
-            } else if col.length != 0 {
-                // Continue producing stream
-                col.new_rand_char();
-                col.length -= 1;
-            } else {
-                // Display spaces until next stream
-                col.col[0].val = ' ';
-                col.length = random_range(3..lines);
-            }
-        });
         if self.update_count <= MAX_DELAY {
             self.update_count += 1;
         } else {
             self.update_count = 1;
         }
-        if config.oldstyle {
-            self.old_style_move_down(config);
-        } else {
-            self.move_down(config);
+
+        for col in self.columns.iter_mut() {
+            if config.asynch && self.update_count <= col.update_rate {
+                // skip this column for asynchronous effect
+                continue;
+            }
+
+            if col.head_is_empty() {
+                // Not in stream
+                if col.spaces > 0 {
+                    // Decrement the spaces until the next stream starts
+                    col.spaces -= 1;
+                } else {
+                    // Start a new stream
+                    col.new_rand_head(config);
+                    col.length = random_range(3..self.lines);
+
+                    // Decrement length of stream
+                    col.length -= 1;
+
+                    // Reset number of spaces until next stream
+                    col.spaces = random_range(1..self.lines + 1);
+                }
+            } else {
+                // In stream
+                if col.length > 0 {
+                    // Continue producing stream
+                    col.new_rand_char();
+                    col.length -= 1;
+                } else {
+                    // Display spaces until next stream
+                    col.rows[0].val = ' ';
+                    col.rows[0].color = config.colour;
+                }
+            }
+
+            if config.oldstyle {
+                col.old_move_down();
+            } else {
+                col.new_move_down();
+            }
         }
     }
-    fn move_down(&mut self, config: &Config) {
-        self.m
-            .iter_mut()
-            .filter(|col| !config.asynch || self.update_count > col.update_rate)
-            .for_each(|col| {
-                // Reset for each column
-                let mut in_stream = false;
 
-                let mut last_was_white = false; // Keep track of white heads
-                let mut running_color = MatrixColor::Cyan;
-
-                col.col.iter_mut().for_each(|block| {
-                    if !in_stream {
-                        if !block.is_space() {
-                            block.val = ' ';
-                            in_stream = true; // We're now in a stream
-                            running_color = block.color;
-                        }
-                    } else if block.is_space() {
-                        // New rand char for head of stream
-                        block.val = rand_char();
-                        block.white = last_was_white;
-                        in_stream = false;
-                        block.bold = coin_flip();
-                    }
-                    // Swapped to "pass on" whiteness and prepare the variable for the next iteration
-                    std::mem::swap(&mut last_was_white, &mut block.white);
-                    block.color = running_color;
-                })
-            })
-    }
-    fn old_style_move_down(&mut self, config: &Config) {
-        // Iterate over all columns and swap spaces
-        self.m
-            .iter_mut()
-            .filter(|col| !config.asynch || self.update_count > col.update_rate)
-            .for_each(|col| {
-                col.col.pop_back();
-                col.col.push_back(Block::default()); // Put a Blank space at the head.
-                col.col.rotate_right(1)
-            });
-    }
     /// Draw the matrix on the screen
     pub fn draw(&mut self, config: &Config, terminal: &mut Terminal) -> io::Result<()> {
         let stdout = &mut terminal.stdout;
-        let first_block = &self[0][0];
+        let first_block = &self.columns[0].rows[0];
         let mut last_bold = first_block.bold;
         let mut last_colour = first_block.term_color();
         // Clear last_color of previous frame
@@ -281,31 +268,27 @@ impl Matrix {
             _ => {}
         }
 
-        //TODO: Use an iterator or something nicer
-        for j in 1..self.num_lines() {
-            for i in 0..self.num_columns() {
-                // Pick the colour we need
-                let mcolour = self[i][j].term_color();
-
-                queue!(stdout, cursor::MoveTo(2 * i as u16, j as u16 - 1))?; // Move the cursor
-                if last_colour != mcolour {
-                    // Set the colour in the terminal.
-                    queue!(stdout, SetForegroundColor(mcolour))?;
-                    last_colour = mcolour;
+        for (x, col) in self.columns.iter().enumerate() {
+            for (y, block) in col.rows.iter().skip(1).enumerate() {
+                let colour = block.term_color();
+                queue!(stdout, cursor::MoveTo(2 * x as u16, y as u16))?; // Move the cursor
+                if colour != last_colour {
+                    queue!(stdout, SetForegroundColor(colour))?;
+                    last_colour = colour;
                 }
 
                 if let FontWeight::SemiBold = config.bold
-                    && last_bold != self[i][j].bold
+                    && last_bold != block.bold
                 {
-                    if self[i][j].bold {
+                    if block.bold {
                         queue!(stdout, SetAttribute(Attribute::Bold))?;
                     } else {
                         queue!(stdout, SetAttribute(Attribute::NormalIntensity))?;
                     }
-                    last_bold = self[i][j].bold;
-                }
+                    last_bold = block.bold;
+                };
                 // Draw the character.
-                queue!(stdout, Print(self[i][j].val))?;
+                queue!(stdout, Print(block.val))?;
             }
         }
         stdout.flush()?;
