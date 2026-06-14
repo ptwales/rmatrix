@@ -26,16 +26,16 @@ thread_local! {
 }
 
 fn random_range(range: Range<usize>) -> usize {
-    RNG.with(|rng| (*rng).borrow_mut().random_range(range))
+    RNG.with_borrow_mut(|rng| rng.random_range(range))
 }
 
 fn rand_char() -> char {
     let (randnum, randmin) = (93, 33);
-    RNG.with(|rng| (*rng).borrow_mut().random::<u8>() % randnum + randmin) as char
+    RNG.with_borrow_mut(|rng| rng.random::<u8>() % randnum + randmin) as char
 }
 
 fn coin_flip() -> bool {
-    RNG.with(|rng| (*rng).borrow_mut().random())
+    RNG.with_borrow_mut(|rng| rng.random())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
