@@ -42,6 +42,22 @@ struct Opt {
     #[arg(short, long)]
     /// Rainbow mode
     rainbow: bool,
+
+    #[arg(short = 'I')]
+    /// Use this network interface for data (/proc/net/dev)
+    net_interface: Option<String>,
+
+    #[arg(short = 'H', default_value = "200")]
+    /// Threshold for reporting network traffic (loop trigger).
+    net_threshold: u8,
+
+    #[arg(short = 'R', value_enum, default_value = "blue")]
+    /// Use this color for recieved packets.
+    rx_color: MatrixColor,
+
+    #[arg(short = 'T', value_enum, default_value = "red")]
+    /// Use this color for transmitted packets.
+    tx_color: MatrixColor,
 }
 
 /// The global state object
@@ -55,6 +71,10 @@ pub struct Config {
     pub update: u8,
     pub colour: MatrixColor,
     pub rainbow: bool,
+    pub net_interface: Option<String>,
+    pub net_threshold: u8,
+    pub rx_color: MatrixColor,
+    pub tx_color: MatrixColor,
     pub pause: bool,
 }
 
@@ -77,6 +97,10 @@ impl Config {
             update: opt.update,
             rainbow: opt.rainbow,
             colour: opt.colour,
+            net_interface: opt.net_interface,
+            net_threshold: opt.net_threshold,
+            tx_color: opt.tx_color,
+            rx_color: opt.rx_color,
             pause: false,
         }
     }

@@ -85,14 +85,14 @@ fn main() -> io::Result<()> {
     let signals = SignalFlags::new()?;
 
     // Create the board
-    let mut matrix: Matrix = Matrix::default();
+    let mut matrix: Matrix = Matrix::new(&config);
 
     // Main event loop
     loop {
         // SIGWINCH: Make a new matrix for the new terminal size.
         if signals.should_resize() {
             terminal.resize_window()?;
-            matrix = Matrix::default();
+            matrix = Matrix::new(&config);
         }
         // Exit the program on exit signals (SIGINT, SIGTERM, SIGQUIT).
         if signals.should_exit() {
@@ -104,7 +104,7 @@ fn main() -> io::Result<()> {
             match event {
                 Event::Resize(_, _) => {
                     terminal.resize_window()?;
-                    matrix = Matrix::default();
+                    matrix = Matrix::new(&config);
                 }
                 Event::Key(key) => {
                     if config.screensaver

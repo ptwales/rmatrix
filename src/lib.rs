@@ -9,6 +9,7 @@ use std::ops::Range;
 use std::time::Duration;
 
 pub mod config;
+mod net;
 
 use config::Config;
 
@@ -20,6 +21,8 @@ use crossterm::terminal::{self, Clear, ClearType};
 use crossterm::{execute, queue};
 use rand::RngExt;
 use rand::rngs::SmallRng;
+
+use crate::net::NetState;
 
 thread_local! {
     static RNG: RefCell<SmallRng> = RefCell::new(rand::make_rng());
@@ -181,37 +184,38 @@ impl Column {
 
 pub struct Matrix {
     columns: Vec<Column>,
-    update_count: u8,
+    update_ticker: u8, // ticker for async scroll
+    net_ticker: u8,    // ticker for network check
     lines: usize,
-}
-
-impl Default for Matrix {
-    /// Create a new matrix with the dimensions of the screen
-    fn default() -> Self {
-        // Get the screen dimensions
-        let (lines, cols) = get_term_size();
-        let columns = (0..cols).map(|_| Column::new(lines)).collect();
-
-        // Create the matrix
-        Matrix {
-            columns,
-            update_count: 0,
-            lines,
-        }
-    }
+    net_state: Option<NetState>,
 }
 
 impl Matrix {
+    /// Create a new matrix with the dimensions of the screen
+    pub fn new(config: &Config) -> Self {
+        // Get the screen dimensions
+        let (lines, cols) = get_term_size();
+        let columns = (0..cols).map(|_| Column::new(lines)).collect();
+        let net_state = config.net_interface.clone().map(NetState::new);
+        // Create the matrix
+        Matrix {
+            columns,
+            update_ticker: 0,
+            net_ticker: 0,
+            lines,
+            net_state,
+        }
+    }
     /// Make the next iteration of matrix
     pub fn arrange(&mut self, config: &Config) {
-        if self.update_count <= MAX_DELAY {
-            self.update_count += 1;
+        if self.update_ticker <= MAX_DELAY {
+            self.update_ticker += 1;
         } else {
-            self.update_count = 1;
+            self.update_ticker = 1;
         }
 
         for col in self.columns.iter_mut() {
-            if config.asynch && self.update_count <= col.update_rate {
+            if config.asynch && self.update_ticker <= col.update_rate {
                 // skip this column for asynchronous effect
                 continue;
             }
@@ -255,6 +259,24 @@ impl Matrix {
 
     /// Draw the matrix on the screen
     pub fn draw(&mut self, config: &Config, terminal: &mut Terminal) -> io::Result<()> {
+        // check network and paint blocks for each packet
+        if !config.rainbow
+            && let Some(net) = &mut self.net_state
+        {
+            if self.net_ticker <= config.net_threshold {
+                self.net_ticker += 1;
+            } else {
+                self.net_ticker = 0;
+                let stats = net.poll();
+                if stats.tx_packets > 0 {
+                    self.paint_packets(stats.tx_packets, config.tx_color);
+                }
+                if stats.rx_packets > 0 {
+                    self.paint_packets(stats.rx_packets, config.rx_color);
+                }
+            }
+        }
+
         let stdout = &mut terminal.stdout;
         let first_block = &self.columns[0].rows[0];
         let mut last_bold = first_block.bold;
@@ -293,6 +315,17 @@ impl Matrix {
         }
         stdout.flush()?;
         Ok(())
+    }
+
+    fn paint_packets(&mut self, packets: u64, color: MatrixColor) {
+        // Nothing here guarantees we're painting an actual sream.
+        let x = random_range(0..self.columns.len());
+        let col = &mut self.columns[x];
+        let y = random_range(1..(col.rows.len() - 1));
+        for block in col.rows.iter_mut().skip(y).take(packets as usize) {
+            block.color = color;
+            block.bold = true;
+        }
     }
 }
 
